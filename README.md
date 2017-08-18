@@ -43,7 +43,7 @@ make
 sudo make install
 ```
 
-I haven't tried cross-compiling this module, but it should work ass well.
+I haven't tried cross-compiling this module, but it should work as well.
 
 
 ## Loading
