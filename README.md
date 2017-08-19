@@ -21,7 +21,12 @@ Fetch the source:
 git clone https://github.com/adrianomarto/soft_uart
 ```
 
-Edit the file `Makefile` to match your kernel headers folder (or create a link, as I did). For example:
+Install the package `raspberrypi-kernel-headers`:
+```
+sudo apt-get install raspberrypi-kernel-headers
+```
+
+Edit the file `Makefile` to match your kernel headers folder (or create a link, as I did). Here is an example:
 ```
 LINUX = /usr/src/linux-headers-4.9.35+
 ```
