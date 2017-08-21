@@ -18,10 +18,15 @@ This module creates a software-based serial port using a configurable pair of GP
 
 Fetch the source:
 ```
-git clone ...
+git clone https://github.com/adrianomarto/soft_uart
 ```
 
-Edit the file `Makefile` to match your kernel headers folder (or create a link, as I did). For example:
+Install the package `raspberrypi-kernel-headers`:
+```
+sudo apt-get install raspberrypi-kernel-headers
+```
+
+Edit the file `Makefile` to match your kernel headers folder (or create a link, as I did). Here is an example:
 ```
 LINUX = /usr/src/linux-headers-4.9.35+
 ```
@@ -43,7 +48,7 @@ make
 sudo make install
 ```
 
-I haven't tried cross-compiling this module, but it should work ass well.
+I haven't tried cross-compiling this module, but it should work as well.
 
 
 ## Loading
@@ -68,7 +73,7 @@ sudo insmod softuart.ko gpio_tx=10 gpio_rx=11
 
 The device will appear as `/dev/ttySOFT0`. Use it as any usual TTY device.
 
-You must be included in the group `dialout`. You can in what groups you are included by typing `groups`. To add an user to the group `dialout`, type:
+You must be included in the group `dialout`. You can verify in what groups you are included by typing `groups`. To add an user to the group `dialout`, type:
 ```
 sudo usermod -aG dialout <username>
 ```
