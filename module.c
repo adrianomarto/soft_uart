@@ -2,9 +2,9 @@
 #include "raspberry_soft_uart.h"
 #include "queue.h"
 
-#include <linux/module.h>     // Needed by all modules
-#include <linux/tty.h>        //
-#include <linux/tty_driver.h> // Needed for struct tty_driver
+#include <linux/module.h>
+#include <linux/tty.h>
+#include <linux/tty_driver.h>
 #include <linux/version.h>
 
 #define SOFT_UART_MAJOR 0
@@ -114,9 +114,9 @@ static int __init soft_uart_init(void)
   soft_uart_driver->type                  = TTY_DRIVER_TYPE_SERIAL;
   soft_uart_driver->subtype               = SERIAL_TYPE_NORMAL;
   soft_uart_driver->init_termios          = tty_std_termios;
-  soft_uart_driver->init_termios.c_ispeed = 9600;
-  soft_uart_driver->init_termios.c_ospeed = 9600;
-  soft_uart_driver->init_termios.c_cflag  = B9600 | CREAD | CS8 | CLOCAL;
+  soft_uart_driver->init_termios.c_ispeed = 4800;
+  soft_uart_driver->init_termios.c_ospeed = 4800;
+  soft_uart_driver->init_termios.c_cflag  = B4800 | CREAD | CS8 | CLOCAL;
 
   // Sets the callbacks for the driver.
   tty_set_operations(soft_uart_driver, &soft_uart_operations);
@@ -216,7 +216,7 @@ static int soft_uart_write(struct tty_struct* tty, const unsigned char* buffer, 
 static int soft_uart_write_room(struct tty_struct* tty)
 {
   struct queue* tx_queue = raspberry_soft_uart_get_tx_queue();
-  return get_queue_capacity(tx_queue);
+  return get_queue_room(tx_queue);
 }
 
 /**
@@ -235,7 +235,7 @@ static void soft_uart_flush_buffer(struct tty_struct* tty)
 static int soft_uart_chars_in_buffer(struct tty_struct* tty)
 {
   struct queue* tx_queue = raspberry_soft_uart_get_tx_queue();
-  return tx_queue->size;
+  return get_queue_room(tx_queue);
 }
 
 /**
@@ -287,7 +287,7 @@ static void soft_uart_set_termios(struct tty_struct* tty, struct ktermios* termi
  */
 static void soft_uart_stop(struct tty_struct* tty)
 {
-  printk(KERN_INFO "soft_uart: soft_uart_stop.\n");
+  printk(KERN_DEBUG "soft_uart: soft_uart_stop.\n");
 }
 
 /**
@@ -296,7 +296,7 @@ static void soft_uart_stop(struct tty_struct* tty)
  */
 static void soft_uart_start(struct tty_struct* tty)
 {
-  printk(KERN_INFO "soft_uart: soft_uart_start.\n");
+  printk(KERN_DEBUG "soft_uart: soft_uart_start.\n");
 }
 
 /**
@@ -305,7 +305,7 @@ static void soft_uart_start(struct tty_struct* tty)
  */
 static void soft_uart_hangup(struct tty_struct* tty)
 {
-  printk(KERN_INFO "soft_uart: soft_uart_hangup.\n");
+  printk(KERN_DEBUG "soft_uart: soft_uart_hangup.\n");
 }
 
 /**
@@ -329,31 +329,14 @@ static int soft_uart_tiocmset(struct tty_struct* tty, unsigned int set, unsigned
 }
 
 /**
- * 
+ * Does nothing.
  * @param tty
  * @param command
  * @param parameter
  */
 static int soft_uart_ioctl(struct tty_struct* tty, unsigned int command, unsigned int long parameter)
 {
-  int error = NONE;
-
-  switch (command)
-  {
-    case TIOCMSET:
-      error = NONE;
-      break;
-
-    case TIOCMGET:
-      error = NONE;
-      break;
-
-    default:
-      error = -ENOIOCTLCMD;
-      break;
-  }
-
-  return error;
+  return 0;
 }
 
 /**
@@ -362,7 +345,7 @@ static int soft_uart_ioctl(struct tty_struct* tty, unsigned int command, unsigne
  */
 static void soft_uart_throttle(struct tty_struct* tty)
 {
-  printk(KERN_INFO "soft_uart: soft_uart_throttle.\n");
+  printk(KERN_DEBUG "soft_uart: soft_uart_throttle.\n");
 }
 
 /**
@@ -371,7 +354,7 @@ static void soft_uart_throttle(struct tty_struct* tty)
  */
 static void soft_uart_unthrottle(struct tty_struct* tty)
 {
-  printk(KERN_INFO "soft_uart: soft_uart_unthrottle.\n");
+  printk(KERN_DEBUG "soft_uart: soft_uart_unthrottle.\n");
 }
 
 // Module entry points.

@@ -91,7 +91,7 @@ int enqueue_string(struct queue* queue, const unsigned char* string, int stringS
  * Gets the number of characters that can be added to a given queue.
  * @return number of characters.
  */
-int get_queue_capacity(struct queue* queue)
+int get_queue_room(struct queue* queue)
 {
   int capacity = 0;
   mutex_lock(&queue->mutex);
@@ -99,3 +99,13 @@ int get_queue_capacity(struct queue* queue)
   mutex_unlock(&queue->mutex);
   return capacity;
 }
+
+/**
+ * Gets the number of characters contained in a given queue.
+ * @return number of characters.
+ */
+int get_queue_size(struct queue* queue)
+{
+  return queue->size;
+}
+

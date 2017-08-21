@@ -19,6 +19,7 @@ void initialize_queue(struct queue* queue);
 int  enqueue_character(struct queue* queue, const unsigned char character);
 int  dequeue_character(struct queue* queue, unsigned char* character);
 int  enqueue_string(struct queue* queue, const unsigned char* string, int stringSize);
-int  get_queue_capacity(struct queue* queue);
+int  get_queue_room(struct queue* queue);
+int  get_queue_size(struct queue* queue);
 
 #endif
