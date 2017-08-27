@@ -1,8 +1,6 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-#include <linux/mutex.h>
-
 #define QUEUE_MAX_SIZE  256
 
 struct queue
@@ -11,7 +9,6 @@ struct queue
   int rear;
   int size;
   unsigned char data[QUEUE_MAX_SIZE];
-  struct mutex mutex;
 };
 
 

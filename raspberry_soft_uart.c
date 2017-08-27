@@ -11,7 +11,7 @@
 static struct queue tx_queue;
 static struct tty_struct* current_tty = NULL;
 static DEFINE_MUTEX(current_tty_mutex);
-static unsigned long baudrate = 4800;
+static ktime_t period;
 static int gpio_tx = 0;
 static int gpio_rx = 0;
 
@@ -103,9 +103,9 @@ int raspberry_soft_uart_close(void)
  * @param baudrate desired baudrate
  * @return 1 if the operation is successful. 0 otherwise.
  */
-int raspberry_soft_uart_set_baudrate(const int _baudrate) 
+int raspberry_soft_uart_set_baudrate(const int baudrate) 
 {
-  baudrate = _baudrate;
+  period = ktime_set(0, 1000000000/baudrate);
   return 1;
 }
 
@@ -129,12 +129,11 @@ struct queue* raspberry_soft_uart_get_tx_queue(void)
 static enum hrtimer_restart timer_callback(struct hrtimer* timer)
 {
   ktime_t current_time = ktime_get();
-  ktime_t interval = ktime_set(0, 1000000000/baudrate);
-    
+  
+  handle_rx();  
   handle_tx();
-  handle_rx();
-    
-  hrtimer_forward(timer, current_time, interval);
+      
+  hrtimer_forward(timer, current_time, period);
   return HRTIMER_RESTART;
 }
 
@@ -229,8 +228,8 @@ static void push_character_to_kernel(unsigned char character)
 #else
   if (tty != NULL)
   {
-    tty_flip_buffer_push(tty);
     tty_insert_flip_char(current_tty, character, TTY_NORMAL);
+    tty_flip_buffer_push(tty);
   }
 #endif
   mutex_unlock(&current_tty_mutex);

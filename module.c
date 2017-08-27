@@ -79,9 +79,11 @@ static int __init soft_uart_init(void)
   }
     
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+  printk(KERN_INFO "soft_uart: LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0).\n");
+
   // Initializes the port.
   tty_port_init(&port);
-  port.low_latency = 1;
+  port.low_latency = 0;
 
   // Allocates the driver.
   soft_uart_driver = tty_alloc_driver(N_PORTS, TTY_DRIVER_REAL_RAW);
@@ -93,6 +95,8 @@ static int __init soft_uart_init(void)
     return -ENOMEM;
   }
 #else
+  printk(KERN_INFO "soft_uart: LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0).\n");
+
   // Allocates the driver.
   soft_uart_driver = alloc_tty_driver(N_PORTS);
 

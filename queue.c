@@ -6,7 +6,6 @@
  */
 void initialize_queue(struct queue* queue)
 {
-  mutex_init(&queue->mutex);
   queue->size  = 0;
   queue->front = 0;
   queue->rear  = 0;
@@ -21,7 +20,6 @@ void initialize_queue(struct queue* queue)
 int enqueue_character(struct queue* queue, const unsigned char character)
 {
   int success = 0;
-  mutex_lock(&queue->mutex);
   if (queue->size < QUEUE_MAX_SIZE)
   {
     if (queue->size != 0)
@@ -37,12 +35,10 @@ int enqueue_character(struct queue* queue, const unsigned char character)
       queue->rear = 0;
       queue->front = 0;
     }
-    queue->size++;
-        
     queue->data[queue->rear] = character;
+    queue->size++;
     success = 1;
   }
-  mutex_unlock(&queue->mutex);
   return success;
 }
 
@@ -55,19 +51,17 @@ int enqueue_character(struct queue* queue, const unsigned char character)
 int dequeue_character(struct queue* queue, unsigned char* character)
 {
   int success = 0;
-  mutex_lock(&queue->mutex);
   if (queue->size > 0)
   {
     *character = queue->data[queue->front];
     queue->front++;
-    queue->size--;
     if (queue->front >= QUEUE_MAX_SIZE)
     {
       queue->front = 0;
     }
+    queue->size--;
     success = 1;
   }
-  mutex_unlock(&queue->mutex);
   return success;
 }
 
@@ -93,11 +87,7 @@ int enqueue_string(struct queue* queue, const unsigned char* string, int stringS
  */
 int get_queue_room(struct queue* queue)
 {
-  int capacity = 0;
-  mutex_lock(&queue->mutex);
-  capacity = QUEUE_MAX_SIZE - queue->size;
-  mutex_unlock(&queue->mutex);
-  return capacity;
+  return QUEUE_MAX_SIZE - queue->size;
 }
 
 /**
