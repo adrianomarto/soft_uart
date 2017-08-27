@@ -336,7 +336,24 @@ static int soft_uart_tiocmset(struct tty_struct* tty, unsigned int set, unsigned
  */
 static int soft_uart_ioctl(struct tty_struct* tty, unsigned int command, unsigned int long parameter)
 {
-  return 0;
+  int error = NONE;
+
+  switch (command)
+  {
+    case TIOCMSET:
+      error = NONE;
+      break;
+ 
+    case TIOCMGET:
+      error = NONE;
+      break;
+      
+      default:
+        error = -ENOIOCTLCMD;
+        break;
+  }
+
+  return error;
 }
 
 /**

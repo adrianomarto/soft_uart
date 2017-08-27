@@ -229,10 +229,7 @@ static void push_character_to_kernel(unsigned char character)
 #else
   if (tty != NULL)
   {
-    if (tty->flip.count >= TTY_FLIPBUF_SIZE)
-    {
-      tty_flip_buffer_push(tty);
-    }
+    tty_flip_buffer_push(tty);
     tty_insert_flip_char(current_tty, character, TTY_NORMAL);
   }
 #endif
