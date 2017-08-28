@@ -8,18 +8,20 @@
 #include <linux/tty_flip.h>
 #include <linux/version.h>
 
-static struct queue tx_queue;
-static struct tty_struct* current_tty = NULL;
-static DEFINE_MUTEX(current_tty_mutex);
-static ktime_t period;
-static int gpio_tx = 0;
-static int gpio_rx = 0;
-
-static struct hrtimer timer;
 static enum hrtimer_restart timer_callback(struct hrtimer* timer);
 static void handle_tx(void);
 static void handle_rx(void);
-static void push_character_to_kernel(unsigned char character);
+static void add_character_to_rx_buffer(unsigned char character);
+static void flush_rx_buffer(void);
+
+static struct queue tx_queue;
+static struct tty_struct* current_tty = NULL;
+static DEFINE_MUTEX(current_tty_mutex);
+static struct hrtimer timer;
+static ktime_t period;
+static int gpio_tx = 0;
+static int gpio_rx = 0;
+static int isFlushPending = 0;
 
 /**
  * Initializes the Raspberry Soft UART infrastructure.
@@ -182,10 +184,17 @@ static void handle_rx(void)
   int bit_value = raspberry_gpio_get(gpio_rx);
   
   // Start bit.
-  if (bit_value == 0 && bit_index == -1)
+  if (bit_index == -1)
   {
-    character = 0;
-    bit_index++;
+    if (bit_value == 0)
+    {
+      character = 0;
+      bit_index++;
+    }
+    else if (isFlushPending)
+    {
+      flush_rx_buffer();
+    }
   }
   
   // Data bits.
@@ -207,28 +216,48 @@ static void handle_rx(void)
   // Stop bit.
   else if (bit_index == 8)
   {
-    push_character_to_kernel(character);
+    add_character_to_rx_buffer(character);
     bit_index = -1;
   }
 }
 
 /**
- * Pushes a given (received) character into the kernel buffer.
+ * Adds a given (received) character to the RX buffer, which is managed by the kernel.
  * @param character given character
  */
-static void push_character_to_kernel(unsigned char character)
+void add_character_to_rx_buffer(unsigned char character)
 {
   mutex_lock(&current_tty_mutex);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
   if (current_tty != NULL && current_tty->port != NULL)
   {
     tty_insert_flip_char(current_tty->port, character, TTY_NORMAL);
-    tty_flip_buffer_push(current_tty->port);
   }
 #else
   if (tty != NULL)
   {
     tty_insert_flip_char(current_tty, character, TTY_NORMAL);
+  }
+#endif
+  isFlushPending = 1;
+  mutex_unlock(&current_tty_mutex);
+}
+
+/**
+ * Schedules the RX buffer to be flushed (flipped).
+ */
+static void flush_rx_buffer(void)
+{
+  mutex_lock(&current_tty_mutex);
+  isFlushPending = 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+  if (current_tty != NULL && current_tty->port != NULL)
+  {
+    tty_flip_buffer_push(current_tty->port);
+  }
+#else
+  if (tty != NULL)
+  {
     tty_flip_buffer_push(tty);
   }
 #endif
