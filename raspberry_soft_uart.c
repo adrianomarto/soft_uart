@@ -21,7 +21,7 @@ static struct hrtimer timer;
 static ktime_t period;
 static int gpio_tx = 0;
 static int gpio_rx = 0;
-static int isFlushPending = 0;
+static int is_flush_pending = 0;
 
 /**
  * Initializes the Raspberry Soft UART infrastructure.
@@ -191,7 +191,7 @@ static void handle_rx(void)
       character = 0;
       bit_index++;
     }
-    else if (isFlushPending)
+    else if (is_flush_pending)
     {
       flush_rx_buffer();
     }
@@ -239,7 +239,7 @@ void add_character_to_rx_buffer(unsigned char character)
     tty_insert_flip_char(current_tty, character, TTY_NORMAL);
   }
 #endif
-  isFlushPending = 1;
+  is_flush_pending = 1;
   mutex_unlock(&current_tty_mutex);
 }
 
@@ -249,7 +249,7 @@ void add_character_to_rx_buffer(unsigned char character)
 static void flush_rx_buffer(void)
 {
   mutex_lock(&current_tty_mutex);
-  isFlushPending = 0;
+  is_flush_pending = 0;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
   if (current_tty != NULL && current_tty->port != NULL)
   {
