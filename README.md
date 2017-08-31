@@ -26,11 +26,6 @@ Install the package `raspberrypi-kernel-headers`:
 sudo apt-get install raspberrypi-kernel-headers
 ```
 
-Edit the file `Makefile` to match your kernel headers folder (or create a link, as I did). Here is an example:
-```
-LINUX = /usr/src/linux-headers-4.9.35+
-```
-
 Edit the file `raspberry_gpio.c` to set the correct value for BCM2708_BASE, according to the version of the Raspberry Pi you are using.
 ```
 // For Raspberry Pi v2 and v3:
