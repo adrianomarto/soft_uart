@@ -69,12 +69,13 @@ int dequeue_character(struct queue* queue, unsigned char* character)
  * Adds a given string to a given queue.
  * @param queue given queue
  * @param string given string
+ * @param string_size size of the given string
  * @return The amount of characters successfully added to the queue.
  */
-int enqueue_string(struct queue* queue, const unsigned char* string, int stringSize)
+int enqueue_string(struct queue* queue, const unsigned char* string, int string_size)
 {
   int n = 0;
-  while (n < stringSize && enqueue_character(queue, string[n]))
+  while (n < string_size && enqueue_character(queue, string[n]))
   {
     n++;
   }

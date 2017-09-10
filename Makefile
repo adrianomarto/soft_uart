@@ -1,6 +1,6 @@
 obj-m += soft_uart.o
 
-soft_uart-objs := module.o raspberry_soft_uart.o raspberry_gpio.o queue.o
+soft_uart-objs := module.o raspberry_soft_uart.o queue.o
 
 RELEASE = $(shell uname -r)
 LINUX = /usr/src/linux-headers-$(RELEASE)

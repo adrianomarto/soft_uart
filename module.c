@@ -1,6 +1,5 @@
 
 #include "raspberry_soft_uart.h"
-#include "queue.h"
 
 #include <linux/module.h>
 #include <linux/tty.h>
@@ -149,6 +148,12 @@ static void __exit soft_uart_exit(void)
 {
   printk(KERN_INFO "soft_uart: Finalizing the module...\n");
   
+  // Finalizes the soft UART.
+  if (!raspberry_soft_uart_finalize())
+  {
+    printk(KERN_ALERT "soft_uart: Something went wrong whilst finalizing the soft UART.\n");
+  }
+  
   // Unregisters the driver.
   if (tty_unregister_driver(soft_uart_driver))
   {
@@ -208,8 +213,7 @@ static void soft_uart_close(struct tty_struct* tty, struct file* file)
  */
 static int soft_uart_write(struct tty_struct* tty, const unsigned char* buffer, int buffer_size)
 {
-  struct queue* tx_queue = raspberry_soft_uart_get_tx_queue();
-  return enqueue_string(tx_queue, buffer, buffer_size);
+  return raspberry_soft_uart_send_string(buffer, buffer_size);
 }
 
 /**
@@ -219,8 +223,7 @@ static int soft_uart_write(struct tty_struct* tty, const unsigned char* buffer, 
  */
 static int soft_uart_write_room(struct tty_struct* tty)
 {
-  struct queue* tx_queue = raspberry_soft_uart_get_tx_queue();
-  return get_queue_room(tx_queue);
+  return raspberry_soft_uart_get_tx_queue_room();
 }
 
 /**
@@ -238,8 +241,7 @@ static void soft_uart_flush_buffer(struct tty_struct* tty)
  */
 static int soft_uart_chars_in_buffer(struct tty_struct* tty)
 {
-  struct queue* tx_queue = raspberry_soft_uart_get_tx_queue();
-  return get_queue_room(tx_queue);
+  return raspberry_soft_uart_get_tx_queue_size();
 }
 
 /**

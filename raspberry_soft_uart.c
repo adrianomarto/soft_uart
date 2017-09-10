@@ -1,27 +1,29 @@
 
 #include "raspberry_soft_uart.h"
-#include "raspberry_gpio.h"
+#include "queue.h"
 
+#include <linux/gpio.h> 
 #include <linux/hrtimer.h>
+#include <linux/interrupt.h>
 #include <linux/ktime.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/version.h>
 
-static enum hrtimer_restart timer_callback(struct hrtimer* timer);
-static void handle_tx(void);
-static void handle_rx(void);
-static void add_character_to_rx_buffer(unsigned char character);
-static void flush_rx_buffer(void);
+static irq_handler_t handle_rx_start(unsigned int irq, void* device, struct pt_regs* registers);
+static enum hrtimer_restart handle_tx(struct hrtimer* timer);
+static enum hrtimer_restart handle_rx(struct hrtimer* timer);
+static void receive_character(unsigned char character);
 
-static struct queue tx_queue;
+static struct queue queue_tx;
 static struct tty_struct* current_tty = NULL;
 static DEFINE_MUTEX(current_tty_mutex);
-static struct hrtimer timer;
+static struct hrtimer timer_tx;
+static struct hrtimer timer_rx;
 static ktime_t period;
 static int gpio_tx = 0;
 static int gpio_rx = 0;
-static int is_flush_pending = 0;
+static int rx_bit_index = -1;
 
 /**
  * Initializes the Raspberry Soft UART infrastructure.
@@ -34,24 +36,37 @@ static int is_flush_pending = 0;
  */
 int raspberry_soft_uart_init(const int _gpio_tx, const int _gpio_rx)
 {
-  int success = 0;
+  bool success = true;
+  
   mutex_init(&current_tty_mutex);
   
-  // Initializes the timer.
-  hrtimer_init(&timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-  timer.function = &timer_callback;
+  // Initializes the TX timer.
+  hrtimer_init(&timer_tx, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+  timer_tx.function = &handle_tx;
+  
+  // Initializes the RX timer.
+  hrtimer_init(&timer_rx, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+  timer_rx.function = &handle_rx;
   
   // Initializes the GPIO pins.
-  if (raspberry_gpio_init())
-  {
-    gpio_tx = _gpio_tx;
-    gpio_rx = _gpio_rx;
-    raspberry_gpio_set_function(gpio_tx, gpio_output);
-    raspberry_gpio_set_function(gpio_rx, gpio_input);
-    raspberry_gpio_set(gpio_tx, 1);
-    success = 1;
-  }
+  gpio_tx = _gpio_tx;
+  gpio_rx = _gpio_rx;
+    
+  success &= gpio_request(gpio_tx, "soft_uart_tx") == 0;
+  success &= gpio_direction_output(gpio_tx, 1) == 0;
+
+  success &= gpio_request(gpio_rx, "soft_uart_rx") == 0;
+  success &= gpio_direction_input(gpio_rx) == 0;
   
+  // Initializes the interruption.
+  success &= request_irq(
+    gpio_to_irq(gpio_rx),
+    (irq_handler_t) handle_rx_start,
+    IRQF_TRIGGER_FALLING,
+    "soft_uart_irq_handler",
+    NULL) == 0;
+  disable_irq(gpio_to_irq(gpio_rx));
+    
   return success;
 }
 
@@ -60,7 +75,11 @@ int raspberry_soft_uart_init(const int _gpio_tx, const int _gpio_rx)
  */
 int raspberry_soft_uart_finalize(void)
 {
-  return raspberry_gpio_finalize();
+  free_irq(gpio_to_irq(gpio_rx), NULL);
+  gpio_set_value(gpio_tx, 0);
+  gpio_free(gpio_tx);
+  gpio_free(gpio_rx);
+  return 1;
 }
 
 /**
@@ -75,9 +94,9 @@ int raspberry_soft_uart_open(struct tty_struct* tty)
   if (current_tty == NULL)
   {
     current_tty = tty;
-    initialize_queue(&tx_queue);
-    hrtimer_start(&timer, ktime_set(0, 0), HRTIMER_MODE_REL);
+    initialize_queue(&queue_tx);
     success = 1;
+    enable_irq(gpio_to_irq(gpio_rx));
   }
   mutex_unlock(&current_tty_mutex);
   return success;
@@ -92,7 +111,9 @@ int raspberry_soft_uart_close(void)
   mutex_lock(&current_tty_mutex);
   if (current_tty != NULL)
   {
-    hrtimer_cancel(&timer);
+    disable_irq(gpio_to_irq(gpio_rx));
+    hrtimer_cancel(&timer_tx);
+    hrtimer_cancel(&timer_rx);
     current_tty = NULL;
     success = 1;
   }
@@ -108,16 +129,45 @@ int raspberry_soft_uart_close(void)
 int raspberry_soft_uart_set_baudrate(const int baudrate) 
 {
   period = ktime_set(0, 1000000000/baudrate);
+  gpio_set_debounce(gpio_rx, 1000/baudrate/2);
   return 1;
 }
 
 /**
- * Gets the TX queue.
- * @return TX queue (never returns NULL)
+ * Adds a given string to the TX queue.
+ * @paran string given string
+ * @param string_size size of the given string
+ * @return The amount of characters successfully added to the queue.
  */
-struct queue* raspberry_soft_uart_get_tx_queue(void)
+int raspberry_soft_uart_send_string(const unsigned char* string, int string_size)
 {
-  return &tx_queue;
+  int result = enqueue_string(&queue_tx, string, string_size);
+  
+  // Starts the TX timer if it is not already running.
+  if (!hrtimer_active(&timer_tx))
+  {
+    hrtimer_start(&timer_tx, period, HRTIMER_MODE_REL);
+  }
+  
+  return result;
+}
+
+/*
+ * Gets the number of characters that can be added to the TX queue.
+ * @return number of characters.
+ */
+int raspberry_soft_uart_get_tx_queue_room(void)
+{
+  return get_queue_room(&queue_tx);
+}
+
+/*
+ * Gets the number of characters in the TX queue.
+ * @return number of characters.
+ */
+int raspberry_soft_uart_get_tx_queue_size(void)
+{
+  return get_queue_size(&queue_tx);
 }
 
 //-----------------------------------------------------------------------------
@@ -125,80 +175,89 @@ struct queue* raspberry_soft_uart_get_tx_queue(void)
 //-----------------------------------------------------------------------------
 
 /**
- * Handles the TX and RX scheduled by a given timer.
- * @param timer given timer.
+ * If we are waiting for the RX start bit, then starts the RX timer. Otherwise,
+ * does nothing.
  */
-static enum hrtimer_restart timer_callback(struct hrtimer* timer)
+static irq_handler_t handle_rx_start(unsigned int irq, void* device, struct pt_regs* registers)
 {
-  ktime_t current_time = ktime_get();
-  
-  handle_rx();  
-  handle_tx();
-      
-  hrtimer_forward(timer, current_time, period);
-  return HRTIMER_RESTART;
+  if (rx_bit_index == -1)
+  {
+    hrtimer_start(&timer_rx, ktime_set(0, 0), HRTIMER_MODE_REL);
+  }
+  return (irq_handler_t) IRQ_HANDLED;
 }
+
 
 /**
  * Dequeues a character from the TX queue and sends it.
  */
-static void handle_tx(void)
+static enum hrtimer_restart handle_tx(struct hrtimer* timer)
 {
+  ktime_t current_time = ktime_get();
   static unsigned char character = 0;
   static int bit_index = -1;
+  enum hrtimer_restart result = HRTIMER_NORESTART;
+  bool must_restart_timer = false;
   
   // Start bit.
   if (bit_index == -1)
   {
-    if (dequeue_character(&tx_queue, &character))
+    if (dequeue_character(&queue_tx, &character))
     {
-      raspberry_gpio_set(gpio_tx, 0);
+      gpio_set_value(gpio_tx, 0);
       bit_index++;
+      must_restart_timer = true;
     }
   }
   
   // Data bits.
   else if (0 <= bit_index && bit_index < 8)
   {
-    raspberry_gpio_set(gpio_tx, 1 & (character >> bit_index));
+    gpio_set_value(gpio_tx, 1 & (character >> bit_index));
     bit_index++;
+    must_restart_timer = true;
   }
   
   // Stop bit.
   else if (bit_index == 8)
   {
-    raspberry_gpio_set(gpio_tx, 1);
+    gpio_set_value(gpio_tx, 1);
     character = 0;
     bit_index = -1;
+    must_restart_timer = get_queue_size(&queue_tx) > 0;
   }
+  
+  // Restarts the TX timer.
+  if (must_restart_timer)
+  {
+    hrtimer_forward(&timer_tx, current_time, period);
+    result = HRTIMER_RESTART;
+  }
+  
+  return result;
 }
 
 /*
  * Receives a character and sends it to the kernel.
  */
-static void handle_rx(void)
+static enum hrtimer_restart handle_rx(struct hrtimer* timer)
 {
+  ktime_t current_time = ktime_get();
   static unsigned int character = 0;
-  static int bit_index = -1;
-  
-  int bit_value = raspberry_gpio_get(gpio_rx);
+  int bit_value = gpio_get_value(gpio_rx);
+  enum hrtimer_restart result = HRTIMER_NORESTART;
+  bool must_restart_timer = false;
   
   // Start bit.
-  if (bit_index == -1)
+  if (rx_bit_index == -1)
   {
-    if (bit_value == 0)
-    {
-      character = 0;
-      bit_index++;
-    }
-    else if (is_flush_pending)
-    {
-      flush_rx_buffer();
-    }
+    rx_bit_index++;
+    character = 0;
+    must_restart_timer = true;
   }
   
   // Data bits.
-  else if (0 <= bit_index && bit_index < 8)
+  else if (0 <= rx_bit_index && rx_bit_index < 8)
   {
     if (bit_value == 0)
     {
@@ -209,55 +268,46 @@ static void handle_rx(void)
       character |= 0x0100;
     }
     
+    rx_bit_index++;
     character >>= 1;
-    bit_index++;
+    must_restart_timer = true;
   }
   
   // Stop bit.
-  else if (bit_index == 8)
+  else if (rx_bit_index == 8)
   {
-    add_character_to_rx_buffer(character);
-    bit_index = -1;
+    receive_character(character);
+    rx_bit_index = -1;
   }
+  
+  // Restarts the RX timer.
+  if (must_restart_timer)
+  {
+    hrtimer_forward(&timer_rx, current_time, period);
+    result = HRTIMER_RESTART;
+  }
+  
+  return result;
 }
 
 /**
- * Adds a given (received) character to the RX buffer, which is managed by the kernel.
+ * Adds a given (received) character to the RX buffer, which is managed by the kernel,
+ * and then flushes (flip) it.
  * @param character given character
  */
-void add_character_to_rx_buffer(unsigned char character)
+void receive_character(unsigned char character)
 {
   mutex_lock(&current_tty_mutex);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
   if (current_tty != NULL && current_tty->port != NULL)
   {
     tty_insert_flip_char(current_tty->port, character, TTY_NORMAL);
-  }
-#else
-  if (tty != NULL)
-  {
-    tty_insert_flip_char(current_tty, character, TTY_NORMAL);
-  }
-#endif
-  is_flush_pending = 1;
-  mutex_unlock(&current_tty_mutex);
-}
-
-/**
- * Schedules the RX buffer to be flushed (flipped).
- */
-static void flush_rx_buffer(void)
-{
-  mutex_lock(&current_tty_mutex);
-  is_flush_pending = 0;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
-  if (current_tty != NULL && current_tty->port != NULL)
-  {
     tty_flip_buffer_push(current_tty->port);
   }
 #else
   if (tty != NULL)
   {
+    tty_insert_flip_char(current_tty, character, TTY_NORMAL);
     tty_flip_buffer_push(tty);
   }
 #endif
