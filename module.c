@@ -1,14 +1,16 @@
 
 #include "raspberry_soft_uart.h"
 
+#include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
 #include <linux/version.h>
 
-#define SOFT_UART_MAJOR 0
-#define N_PORTS         1
-#define NONE            0
+#define SOFT_UART_MAJOR            0
+#define N_PORTS                    1
+#define NONE                       0
+#define TX_BUFFER_FLUSH_TIMEOUT 4000  // milliseconds
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Adriano Marto Reis");
@@ -194,6 +196,15 @@ static int soft_uart_open(struct tty_struct* tty, struct file* file)
  */
 static void soft_uart_close(struct tty_struct* tty, struct file* file)
 {
+  // Waits for the TX buffer to be empty before closing the UART.
+  int wait_time = 0;
+  while ((raspberry_soft_uart_get_tx_queue_size() > 0)
+    && (wait_time < TX_BUFFER_FLUSH_TIMEOUT))
+  {
+    msleep(100);
+    wait_time += 100;
+  }
+  
   if (raspberry_soft_uart_close())
   {
     printk(KERN_INFO "soft_uart: Device closed.\n");
