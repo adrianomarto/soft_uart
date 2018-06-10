@@ -26,16 +26,6 @@ Install the package `raspberrypi-kernel-headers`:
 sudo apt-get install raspberrypi-kernel-headers
 ```
 
-Edit the file `raspberry_gpio.c` to set the correct value for BCM2708_BASE, according to the version of the Raspberry Pi you are using.
-```
-// For Raspberry Pi v2 and v3:
-#define BCM2708_BASE  0x3f000000
-
-//For Raspberry Pi v1:
-#define BCM2708_BASE  0x20000000
-
-```
-
 Run `make` and `make install`, as usual.
 ```
 cd soft_uart
