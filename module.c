@@ -15,7 +15,7 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Adriano Marto Reis");
 MODULE_DESCRIPTION("Software-UART for Raspberry Pi");
-MODULE_VERSION("0.1");
+MODULE_VERSION("0.2");
 
 static int gpio_tx = 17;
 module_param(gpio_tx, int, 0);
