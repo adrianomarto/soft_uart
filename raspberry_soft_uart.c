@@ -182,7 +182,7 @@ static irq_handler_t handle_rx_start(unsigned int irq, void* device, struct pt_r
 {
   if (rx_bit_index == -1)
   {
-    hrtimer_start(&timer_rx, ktime_set(0, 0), HRTIMER_MODE_REL);
+    hrtimer_start(&timer_rx, ktime_set(0, period / 2), HRTIMER_MODE_REL);
   }
   return (irq_handler_t) IRQ_HANDLED;
 }
