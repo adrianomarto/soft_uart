@@ -50,7 +50,7 @@ sudo insmod soft_uart.ko
 
 Loading module with custom parameters:
 ```
-sudo insmod softuart.ko gpio_tx=10 gpio_rx=11
+sudo insmod soft_uart.ko gpio_tx=10 gpio_rx=11
 ```
 
 
