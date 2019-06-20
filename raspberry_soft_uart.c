@@ -21,6 +21,7 @@ static DEFINE_MUTEX(current_tty_mutex);
 static struct hrtimer timer_tx;
 static struct hrtimer timer_rx;
 static ktime_t period;
+static ktime_t half_period;
 static int gpio_tx = 0;
 static int gpio_rx = 0;
 static int rx_bit_index = -1;
@@ -129,6 +130,7 @@ int raspberry_soft_uart_close(void)
 int raspberry_soft_uart_set_baudrate(const int baudrate) 
 {
   period = ktime_set(0, 1000000000/baudrate);
+  half_period = ktime_set(0, 1000000000/baudrate/2);
   gpio_set_debounce(gpio_rx, 1000/baudrate/2);
   return 1;
 }
@@ -182,7 +184,7 @@ static irq_handler_t handle_rx_start(unsigned int irq, void* device, struct pt_r
 {
   if (rx_bit_index == -1)
   {
-    hrtimer_start(&timer_rx, ktime_set(0, period / 2), HRTIMER_MODE_REL);
+    hrtimer_start(&timer_rx, half_period, HRTIMER_MODE_REL);
   }
   return (irq_handler_t) IRQ_HANDLED;
 }
