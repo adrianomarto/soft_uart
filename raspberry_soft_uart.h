@@ -11,5 +11,6 @@ int raspberry_soft_uart_set_baudrate(const int baudrate);
 int raspberry_soft_uart_send_string(const unsigned char* string, int string_size);
 int raspberry_soft_uart_get_tx_queue_room(void);
 int raspberry_soft_uart_get_tx_queue_size(void);
+int raspberry_soft_uart_set_rx_callback(void (*callback)(unsigned char));
 
 #endif

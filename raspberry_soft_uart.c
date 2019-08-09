@@ -25,6 +25,7 @@ static ktime_t half_period;
 static int gpio_tx = 0;
 static int gpio_rx = 0;
 static int rx_bit_index = -1;
+static void (*rx_callback)(unsigned char) = NULL;
 
 /**
  * Initializes the Raspberry Soft UART infrastructure.
@@ -108,18 +109,13 @@ int raspberry_soft_uart_open(struct tty_struct* tty)
  */
 int raspberry_soft_uart_close(void)
 {
-  int success = 0;
   mutex_lock(&current_tty_mutex);
-  if (current_tty != NULL)
-  {
-    disable_irq(gpio_to_irq(gpio_rx));
-    hrtimer_cancel(&timer_tx);
-    hrtimer_cancel(&timer_rx);
-    current_tty = NULL;
-    success = 1;
-  }
+  disable_irq(gpio_to_irq(gpio_rx));
+  hrtimer_cancel(&timer_tx);
+  hrtimer_cancel(&timer_rx);
+  current_tty = NULL;
   mutex_unlock(&current_tty_mutex);
-  return success;
+  return 1;
 }
 
 /**
@@ -170,6 +166,16 @@ int raspberry_soft_uart_get_tx_queue_room(void)
 int raspberry_soft_uart_get_tx_queue_size(void)
 {
   return get_queue_size(&queue_tx);
+}
+
+/**
+ * Sets the callback function to be called on received character.
+ * @param callback the callback function
+ */
+int raspberry_soft_uart_set_rx_callback(void (*callback)(unsigned char))
+{
+	rx_callback = callback;
+	return 1;
 }
 
 //-----------------------------------------------------------------------------
@@ -259,7 +265,7 @@ static enum hrtimer_restart handle_rx(struct hrtimer* timer)
   }
   
   // Data bits.
-  else if (0 <= rx_bit_index && rx_bit_index < 8)
+  else if (0 <= rx_bit_index && rx_bit_index < 7)
   {
     if (bit_value == 0)
     {
@@ -276,8 +282,9 @@ static enum hrtimer_restart handle_rx(struct hrtimer* timer)
   }
   
   // Stop bit.
-  else if (rx_bit_index == 8)
+  else if (rx_bit_index == 7)
   {
+	character >>= 1;
     receive_character(character);
     rx_bit_index = -1;
   }
@@ -300,18 +307,22 @@ static enum hrtimer_restart handle_rx(struct hrtimer* timer)
 void receive_character(unsigned char character)
 {
   mutex_lock(&current_tty_mutex);
+  if (rx_callback != NULL) {
+	  (*rx_callback)(character);
+  } else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
-  if (current_tty != NULL && current_tty->port != NULL)
-  {
-    tty_insert_flip_char(current_tty->port, character, TTY_NORMAL);
-    tty_flip_buffer_push(current_tty->port);
-  }
+    if (current_tty != NULL && current_tty->port != NULL)
+    {
+      tty_insert_flip_char(current_tty->port, character, TTY_NORMAL);
+      tty_flip_buffer_push(current_tty->port);
+    }
 #else
-  if (tty != NULL)
-  {
-    tty_insert_flip_char(current_tty, character, TTY_NORMAL);
-    tty_flip_buffer_push(tty);
-  }
+    if (tty != NULL)
+    {
+      tty_insert_flip_char(current_tty, character, TTY_NORMAL);
+      tty_flip_buffer_push(tty);
+    }
 #endif
+  }
   mutex_unlock(&current_tty_mutex);
 }
