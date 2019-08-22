@@ -93,6 +93,7 @@ int raspberry_soft_uart_open(struct tty_struct* tty)
 {
   int success = 0;
   mutex_lock(&current_tty_mutex);
+  rx_bit_index = -1;
   if (current_tty == NULL)
   {
     current_tty = tty;
