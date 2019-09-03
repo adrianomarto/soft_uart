@@ -266,7 +266,7 @@ static enum hrtimer_restart handle_rx(struct hrtimer* timer)
   }
   
   // Data bits.
-  else if (0 <= rx_bit_index && rx_bit_index < 7)
+  else if (0 <= rx_bit_index && rx_bit_index < 8)
   {
     if (bit_value == 0)
     {
@@ -283,9 +283,8 @@ static enum hrtimer_restart handle_rx(struct hrtimer* timer)
   }
   
   // Stop bit.
-  else if (rx_bit_index == 7)
+  else if (rx_bit_index == 8)
   {
-	character >>= 1;
     receive_character(character);
     rx_bit_index = -1;
   }
