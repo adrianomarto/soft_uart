@@ -18,7 +18,7 @@ This module creates a software-based serial port using a configurable pair of GP
 
 Fetch the source:
 ```
-git clone https://github.com/sfera-labs/soft_uart
+git clone --depth 1 https://github.com/sfera-labs/soft_uart
 ```
 
 Install the package `raspberrypi-kernel-headers`:
