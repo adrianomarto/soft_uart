@@ -84,7 +84,6 @@ static int __init soft_uart_init(void)
 
   // Initializes the port.
   tty_port_init(&port);
-  port.low_latency = 0;
 
   // Allocates the driver.
   soft_uart_driver = tty_alloc_driver(N_PORTS, TTY_DRIVER_REAL_RAW);
