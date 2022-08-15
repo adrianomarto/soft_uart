@@ -134,7 +134,7 @@ static int __init soft_uart_init(void)
   if (tty_register_driver(soft_uart_driver))
   {
     printk(KERN_ALERT "soft_uart: Failed to register the driver.\n");
-    put_tty_driver(soft_uart_driver);
+    tty_driver_kref_put(soft_uart_driver);
     return -1; // return if registration fails
   }
 
@@ -161,7 +161,7 @@ static void __exit soft_uart_exit(void)
     printk(KERN_ALERT "soft_uart: Failed to unregister the driver.\n");
   }
 
-  put_tty_driver(soft_uart_driver);
+  tty_driver_kref_put(soft_uart_driver);
   printk(KERN_INFO "soft_uart: Module finalized.\n");
 }
 
