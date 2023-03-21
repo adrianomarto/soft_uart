@@ -10,7 +10,7 @@
 #include <linux/tty_flip.h>
 #include <linux/version.h>
 
-static irq_handler_t handle_rx_start(unsigned int irq, void* device, struct pt_regs* registers);
+static irqreturn_t handle_rx_start(int irq, void *device);
 static enum hrtimer_restart handle_tx(struct hrtimer* timer);
 static enum hrtimer_restart handle_rx(struct hrtimer* timer);
 static void receive_character(unsigned char character);
@@ -63,7 +63,7 @@ int raspberry_soft_uart_init(const int _gpio_tx, const int _gpio_rx)
   // Initializes the interruption.
   success &= request_irq(
     gpio_to_irq(gpio_rx),
-    (irq_handler_t) handle_rx_start,
+    handle_rx_start,
     IRQF_TRIGGER_FALLING,
     "soft_uart_irq_handler",
     NULL) == 0;
@@ -187,13 +187,13 @@ int raspberry_soft_uart_set_rx_callback(void (*callback)(unsigned char))
  * If we are waiting for the RX start bit, then starts the RX timer. Otherwise,
  * does nothing.
  */
-static irq_handler_t handle_rx_start(unsigned int irq, void* device, struct pt_regs* registers)
+static irqreturn_t handle_rx_start(int irq, void *device)
 {
   if (rx_bit_index == -1)
   {
     hrtimer_start(&timer_rx, half_period, HRTIMER_MODE_REL);
   }
-  return (irq_handler_t) IRQ_HANDLED;
+  return IRQ_HANDLED;
 }
 
 
