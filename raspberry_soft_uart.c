@@ -128,7 +128,7 @@ int raspberry_soft_uart_set_baudrate(const int baudrate)
 {
   period = ktime_set(0, 1000000000/baudrate);
   half_period = ktime_set(0, 1000000000/baudrate/2);
-  gpio_set_debounce(gpio_rx, 1000/baudrate/2);
+  gpiod_set_debounce(gpio_to_desc(gpio_rx), 1000/baudrate/2);
   return 1;
 }
 
