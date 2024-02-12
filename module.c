@@ -30,7 +30,7 @@ static int  soft_uart_write(struct tty_struct*, const unsigned char*, int);
 static unsigned int soft_uart_write_room(struct tty_struct*);
 static void soft_uart_flush_buffer(struct tty_struct*);
 static unsigned int soft_uart_chars_in_buffer(struct tty_struct*);
-static void soft_uart_set_termios(struct tty_struct*, struct ktermios*);
+static void soft_uart_set_termios(struct tty_struct*, const struct ktermios*);
 static void soft_uart_stop(struct tty_struct*);
 static void soft_uart_start(struct tty_struct*);
 static void soft_uart_hangup(struct tty_struct*);
@@ -256,7 +256,7 @@ static unsigned int soft_uart_chars_in_buffer(struct tty_struct* tty)
  * @param tty given TTY
  * @param termios parameters
  */
-static void soft_uart_set_termios(struct tty_struct* tty, struct ktermios* termios)
+static void soft_uart_set_termios(struct tty_struct* tty, const struct ktermios* termios)
 {
   int cflag = 0;
   speed_t baudrate = tty_get_baud_rate(tty);
