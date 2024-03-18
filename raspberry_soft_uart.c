@@ -2,7 +2,6 @@
 #include "raspberry_soft_uart.h"
 #include "queue.h"
 
-#include <linux/gpio.h> 
 #include <linux/hrtimer.h>
 #include <linux/interrupt.h>
 #include <linux/ktime.h>
@@ -22,8 +21,8 @@ static struct hrtimer timer_tx;
 static struct hrtimer timer_rx;
 static ktime_t period;
 static ktime_t half_period;
-static int gpio_tx = 0;
-static int gpio_rx = 0;
+static struct gpio_desc *gpio_tx;
+static struct gpio_desc *gpio_rx;
 static int rx_bit_index = -1;
 static void (*rx_callback)(unsigned char) = NULL;
 
@@ -36,7 +35,7 @@ static void (*rx_callback)(unsigned char) = NULL;
  * @param gpio_rx GPIO pin used as RX
  * @return 1 if the initialization is successful. 0 otherwise.
  */
-int raspberry_soft_uart_init(const int _gpio_tx, const int _gpio_rx)
+int raspberry_soft_uart_init(struct gpio_desc *_gpio_tx, struct gpio_desc *_gpio_rx)
 {
   bool success = true;
   
@@ -53,21 +52,15 @@ int raspberry_soft_uart_init(const int _gpio_tx, const int _gpio_rx)
   // Initializes the GPIO pins.
   gpio_tx = _gpio_tx;
   gpio_rx = _gpio_rx;
-    
-  success &= gpio_request(gpio_tx, "soft_uart_tx") == 0;
-  success &= gpio_direction_output(gpio_tx, 1) == 0;
-
-  success &= gpio_request(gpio_rx, "soft_uart_rx") == 0;
-  success &= gpio_direction_input(gpio_rx) == 0;
   
   // Initializes the interruption.
   success &= request_irq(
-    gpio_to_irq(gpio_rx),
+    gpiod_to_irq(gpio_rx),
     handle_rx_start,
     IRQF_TRIGGER_FALLING,
     "soft_uart_irq_handler",
     NULL) == 0;
-  disable_irq(gpio_to_irq(gpio_rx));
+  disable_irq(gpiod_to_irq(gpio_rx));
     
   return success;
 }
@@ -77,10 +70,10 @@ int raspberry_soft_uart_init(const int _gpio_tx, const int _gpio_rx)
  */
 int raspberry_soft_uart_finalize(void)
 {
-  free_irq(gpio_to_irq(gpio_rx), NULL);
-  gpio_set_value(gpio_tx, 0);
-  gpio_free(gpio_tx);
-  gpio_free(gpio_rx);
+  free_irq(gpiod_to_irq(gpio_rx), NULL);
+  gpiod_set_value(gpio_tx, 0);
+  gpiod_put(gpio_tx);
+  gpiod_put(gpio_rx);
   return 1;
 }
 
@@ -99,7 +92,7 @@ int raspberry_soft_uart_open(struct tty_struct* tty)
     current_tty = tty;
     initialize_queue(&queue_tx);
     success = 1;
-    enable_irq(gpio_to_irq(gpio_rx));
+    enable_irq(gpiod_to_irq(gpio_rx));
   }
   mutex_unlock(&current_tty_mutex);
   return success;
@@ -111,7 +104,7 @@ int raspberry_soft_uart_open(struct tty_struct* tty)
 int raspberry_soft_uart_close(void)
 {
   mutex_lock(&current_tty_mutex);
-  disable_irq(gpio_to_irq(gpio_rx));
+  disable_irq(gpiod_to_irq(gpio_rx));
   hrtimer_cancel(&timer_tx);
   hrtimer_cancel(&timer_rx);
   current_tty = NULL;
@@ -128,7 +121,7 @@ int raspberry_soft_uart_set_baudrate(const int baudrate)
 {
   period = ktime_set(0, 1000000000/baudrate);
   half_period = ktime_set(0, 1000000000/baudrate/2);
-  gpiod_set_debounce(gpio_to_desc(gpio_rx), 1000/baudrate/2);
+  gpiod_set_debounce(gpio_rx, 1000/baudrate/2);
   return 1;
 }
 
@@ -213,7 +206,7 @@ static enum hrtimer_restart handle_tx(struct hrtimer* timer)
   {
     if (dequeue_character(&queue_tx, &character))
     {
-      gpio_set_value(gpio_tx, 0);
+      gpiod_set_value(gpio_tx, 0);
       bit_index++;
       must_restart_timer = true;
     }
@@ -222,7 +215,7 @@ static enum hrtimer_restart handle_tx(struct hrtimer* timer)
   // Data bits.
   else if (0 <= bit_index && bit_index < 8)
   {
-    gpio_set_value(gpio_tx, 1 & (character >> bit_index));
+    gpiod_set_value(gpio_tx, 1 & (character >> bit_index));
     bit_index++;
     must_restart_timer = true;
   }
@@ -230,7 +223,7 @@ static enum hrtimer_restart handle_tx(struct hrtimer* timer)
   // Stop bit.
   else if (bit_index == 8)
   {
-    gpio_set_value(gpio_tx, 1);
+    gpiod_set_value(gpio_tx, 1);
     character = 0;
     bit_index = -1;
     must_restart_timer = get_queue_size(&queue_tx) > 0;
@@ -253,7 +246,7 @@ static enum hrtimer_restart handle_rx(struct hrtimer* timer)
 {
   ktime_t current_time = ktime_get();
   static unsigned int character = 0;
-  int bit_value = gpio_get_value(gpio_rx);
+  int bit_value = gpiod_get_value(gpio_rx);
   enum hrtimer_restart result = HRTIMER_NORESTART;
   bool must_restart_timer = false;
   

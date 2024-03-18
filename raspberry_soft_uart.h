@@ -2,8 +2,9 @@
 #define RASPBERRY_SOFT_UART_H
 
 #include <linux/tty.h>
+#include <linux/gpio/consumer.h>
 
-int raspberry_soft_uart_init(const int gpio_tx, const int gpio_rx);
+int raspberry_soft_uart_init(struct gpio_desc *_gpio_tx, struct gpio_desc *_gpio_rx);
 int raspberry_soft_uart_finalize(void);
 int raspberry_soft_uart_open(struct tty_struct* tty);
 int raspberry_soft_uart_close(void);
