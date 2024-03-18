@@ -6,6 +6,7 @@
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
 #include <linux/version.h>
+#include <linux/gpio.h>
 
 #define SOFT_UART_MAJOR            0
 #define N_PORTS                    1
@@ -71,9 +72,17 @@ static struct tty_port port;
  */
 static int __init soft_uart_init(void)
 {
-  printk(KERN_INFO "soft_uart: Initializing module...\n");
+  bool success = true;
   
-  if (!raspberry_soft_uart_init(gpio_tx, gpio_rx))
+  printk(KERN_INFO "soft_uart: Initializing module...\n");
+
+  success &= gpio_request(gpio_tx, "soft_uart_tx") == 0;
+  success &= gpio_direction_output(gpio_tx, 1) == 0;
+
+  success &= gpio_request(gpio_rx, "soft_uart_rx") == 0;
+  success &= gpio_direction_input(gpio_rx) == 0;
+  
+  if (!success || !raspberry_soft_uart_init(gpio_to_desc(gpio_tx), gpio_to_desc(gpio_rx)))
   {
     printk(KERN_ALERT "soft_uart: Failed initialize GPIO.\n");
     return -ENOMEM;
