@@ -96,6 +96,7 @@ int raspberry_soft_uart_open(struct tty_struct* tty)
     current_tty = tty;
     initialize_queue(&queue_tx);
     success = 1;
+    rx_bit_index = -1;
     enable_irq(gpio_to_irq(gpio_rx));
   }
   mutex_unlock(&current_tty_mutex);
