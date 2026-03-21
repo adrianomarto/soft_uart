@@ -40,17 +40,22 @@ I haven't tried cross-compiling this module, but it should work as well.
 
 Module parameters:
 
-* gpio_tx: int [default = 17]
-* gpio_rx: int [default = 27]
+* gpio_tx: int [default = 529]
+* gpio_rx: int [default = 539]
 
 Loading the module with default parameters:
 ```
 sudo insmod soft_uart.ko
 ```
 
-Loading module with custom parameters:
+Look up GPIO number using the following command, for setting up pins other than the default.
 ```
-sudo insmod soft_uart.ko gpio_tx=10 gpio_rx=11
+cat /sys/kernel/debug/gpio
+```
+
+Loading module with custom parameters with (GPIO17:529) as TX and (GPIO27:539) as RX:
+```
+sudo insmod soft_uart.ko gpio_tx=529 gpio_rx=539
 ```
 
 
